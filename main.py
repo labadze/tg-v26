@@ -1,5 +1,6 @@
 import csv
 import datetime
+import json
 import os
 import sys
 import time
@@ -119,6 +120,140 @@ def get_group_members():
         print(RESET)
     else:
         print('Session is dead')
+
+
+def send_single_message():
+    client_index = 0
+    account_index = 0
+    dead_sessions = 0
+    recipient_index = 0
+    recipients = []
+    campaign_results = []
+    f = open("templates/message1.txt", "r")
+
+    message = f.read()
+    print(message)
+    file = os.path.isfile(str('recipients.csv'))
+    print(file)
+    if file is True:
+        print('Move file')
+        # moved_file = "tmp/recipients-" + str(datetime.datetime.now().isoformat()) + '.csv'
+        # shutil.move(str('campaigns/recipients.csv'), 'recipients.csv')
+        if os.path.isfile('recipients.csv') is True:
+            with open('recipients.csv', newline='') as csv_file:
+                reader = csv.DictReader(csv_file)
+                for row in reader:
+                    # TODO: Fix sending with id
+                    # all_recipients.append(row)
+                    # print(row)
+                    if len(row["username"]) > 2:
+                        usr_obj = {
+                            "id": row["id"],
+                            "access_hash": row["access_hash"],
+                            "first_name": row["first_name"],
+                            "last_name": row["last_name"],
+                            "username": row["username"]
+                        }
+                        print(usr_obj)
+                        recipients.append(usr_obj)
+                with open('static/clients.json') as json_file:
+                    clients = json.load(json_file)
+                    print(len(clients))
+                    sessions = [x for x in os.listdir('sessions/.') if 'session' in x]
+                    # sessions = sessions[980:]
+                    available_sessions = len(sessions) - dead_sessions
+                    # while account_index < available_sessions * 16:
+                    while recipient_index < 800:
+                        if account_index < len(recipients):
+                            for session in sessions:
+                                print(session)
+                                client = TelegramClient(session='sessions/' + str(session).replace('.session', ''),
+                                                        api_id=clients[client_index]["api_id"],
+                                                        api_hash=clients[client_index]["api_hash"])
+
+                                print('Connecting')
+                                try:
+                                    client.connect()
+                                except Exception as e:
+                                    print(e)
+                                    continue
+                                print('Getting me')
+                                try:
+                                    me = client.get_me()
+                                except Exception as e:
+                                    print(e)
+                                    continue
+                                if me is not None:
+                                    print(me)
+                                    try:
+                                        receiver = client.get_entity(recipients[recipient_index]["username"])
+                                        print(MAGENTA)
+                                        print(receiver)
+                                    except Exception as e:
+                                        print(e)
+                                        continue
+
+                                    if receiver is not None:
+                                        try:
+                                            client.send_message(
+                                                receiver,
+                                                message=message,
+                                                parse_mode='md',
+                                                file="PATH_TO_IMAGE",
+                                            )
+                                            msg_obj = {
+                                                "date_time": str(datetime.datetime.now().isoformat()),
+                                                "recipient": recipients[recipient_index]["username"],
+                                                "application": session,
+                                                "success": True,
+                                                "error": None
+                                            }
+                                            campaign_results.append(msg_obj)
+
+                                            print(CYAN + 'Success, Sent...')
+                                            # r += 1
+                                            print(CYAN + str(recipient_index))
+                                        except Exception as e:
+                                            msg_obj = {
+                                                "date_time": str(datetime.datetime.now().isoformat()),
+                                                "recipient": recipients[recipient_index]["username"],
+                                                "application": session,
+                                                "success": False,
+                                                "error": str(e)
+                                            }
+                                            campaign_results.append(msg_obj)
+
+                                            print(e)
+                                            print(RED + 'Cannot')
+                                            print(recipient_index)
+                                            continue
+                                        try:
+                                            client.disconnect()
+                                            print(RESET)
+                                            print('DISCONNECTING')
+                                        except Exception as e:
+                                            print(e)
+                                            continue
+
+                                client_index += 1
+                                account_index += 1
+                                recipient_index += 1
+                                time.sleep(1)
+                                if client_index == 60:
+                                    client_index = 0
+                    file_name = 'results/' + str(
+                        datetime.datetime.now().isoformat()) + '-sent.csv'
+                    with open(file_name, 'w', newline='') as out_csv_file:
+                        fieldnames = ['date', 'recipient', 'success', 'app', 'error']
+                        writer = csv.DictWriter(out_csv_file, fieldnames=fieldnames)
+                        writer.writeheader()
+                        for result in campaign_results:
+                            writer.writerow({'date': str(datetime.datetime.now().isoformat()),
+                                             'recipient': result["recipient"],
+                                             'success': result["success"],
+                                             'app': result["application"],
+                                             'error': result["error"]
+                                             })
 
 
 if __name__ == '__main__':
